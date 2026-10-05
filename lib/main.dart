@@ -152,11 +152,11 @@ class PerformanceItem {
 
 class ApiService {
   static String? token;
-
-  static String get baseUrl {
-    if (kIsWeb) return 'http://localhost:8000/api/v1';
-    if (defaultTargetPlatform == TargetPlatform.android) return 'http://10.0.2.2:8000/api/v1';
-    return 'http://127.0.0.1:8000/api/v1';
+String get baseUrl {
+  return 'https://edureach-backend-gsop.onrender.com/api/v1';
+}
+  
+    
   }
 
   static Map<String, String> get headers => {
