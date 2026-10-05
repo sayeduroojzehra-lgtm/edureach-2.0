@@ -152,12 +152,11 @@ class PerformanceItem {
 
 class ApiService {
   static String? token;
-String get baseUrl {
-  return 'https://edureach-backend-gsop.onrender.com/api/v1';
-}
+static const String baseUrl =
+    'https://edureach-backend-gsop.onrender.com/api/v1';
   
     
-  }
+  
 
   static Map<String, String> get headers => {
         'Content-Type': 'application/json',
