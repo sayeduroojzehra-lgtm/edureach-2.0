@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  edureach-backend:
+    build: .
+    container_name: edureach_api
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - SECRET_KEY=production-secret-key-edureach-change-me
+      - DATABASE_URL=sqlite:///./edureach.db
+    volumes:
+      - ./data:/app/data
