@@ -12,7 +12,7 @@ from app.schemas.attendance import (
     AttendanceRecordResponse,
     StudentAttendanceStats,
 )
-from app.utils.security import get_optional_user
+from app.utils.security import require_teacher
 
 router = APIRouter(prefix="/attendance", tags=["Daily Attendance"])
 
@@ -92,7 +92,7 @@ def get_attendance(
 @router.post("", response_model=AttendanceSessionResponse, summary="Save or update daily attendance")
 def save_attendance(
     payload: AttendanceSaveRequest,
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User = Depends(require_teacher),
     db: Session = Depends(get_db)
 ):
     """

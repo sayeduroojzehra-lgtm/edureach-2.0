@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models.note import StudyNote
 from app.models.user import User
 from app.schemas.note import NoteCreate, NoteUpdate, NoteResponse, NoteListResponse
-from app.utils.security import get_optional_user
+from app.utils.security import require_teacher
 
 router = APIRouter(prefix="/notes", tags=["Study Notes"])
 
@@ -22,8 +22,16 @@ def make_pdf_url(request: Request, filename: str) -> str:
     return str(request.base_url).rstrip("/") + f"/uploads/{filename}"
 
 
+def with_current_host(request: Request, note: NoteResponse) -> NoteResponse:
+    """Old notes may store http://localhost:8000/... ; rebuild the link with this server's host."""
+    if note.pdf_url and "/uploads/" in note.pdf_url:
+        note.pdf_url = make_pdf_url(request, note.pdf_url.rsplit("/uploads/", 1)[1])
+    return note
+
+
 @router.get("", response_model=NoteListResponse, summary="List notes with standard, subject, and search filters")
 def list_notes(
+    request: Request,
     standard: Optional[int] = Query(None, ge=1, le=10, description="Filter by school standard (1-10)"),
     subject: Optional[str] = Query(None, description="Filter by subject name"),
     q: Optional[str] = Query(None, description="Search term in title or content"),
@@ -42,7 +50,7 @@ def list_notes(
 
     total = query.count()
     notes = query.order_by(StudyNote.id.desc()).offset(offset).limit(limit).all()
-    return NoteListResponse(total=total, notes=[NoteResponse.model_validate(n) for n in notes])
+    return NoteListResponse(total=total, notes=[with_current_host(request, NoteResponse.model_validate(n)) for n in notes])
 
 
 @router.post("", response_model=NoteResponse, status_code=status.HTTP_201_CREATED, summary="Upload a PDF study note")
@@ -54,7 +62,7 @@ async def create_note(
     content: str = Form(""),
     teacher: str = Form("Class Teacher"),
     pdf: UploadFile = File(...),
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User = Depends(require_teacher),
     db: Session = Depends(get_db),
 ):
     filename = (pdf.filename or "").strip()
@@ -95,15 +103,20 @@ async def create_note(
 
 
 @router.get("/{note_id}", response_model=NoteResponse, summary="Get single study note")
-def get_note(note_id: int, db: Session = Depends(get_db)):
+def get_note(request: Request, note_id: int, db: Session = Depends(get_db)):
     note = db.query(StudyNote).filter(StudyNote.id == note_id).first()
     if not note:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Study note not found")
-    return NoteResponse.model_validate(note)
+    return with_current_host(request, NoteResponse.model_validate(note))
 
 
 @router.put("/{note_id}", response_model=NoteResponse, summary="Update study note")
-def update_note(note_id: int, payload: NoteUpdate, db: Session = Depends(get_db)):
+def update_note(
+    note_id: int,
+    payload: NoteUpdate,
+    db: Session = Depends(get_db),
+    _teacher: User = Depends(require_teacher),
+):
     note = db.query(StudyNote).filter(StudyNote.id == note_id).first()
     if not note:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Study note not found")
@@ -121,7 +134,11 @@ def update_note(note_id: int, payload: NoteUpdate, db: Session = Depends(get_db)
 
 
 @router.delete("/{note_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a note")
-def delete_note(note_id: int, db: Session = Depends(get_db)):
+def delete_note(
+    note_id: int,
+    db: Session = Depends(get_db),
+    _teacher: User = Depends(require_teacher),
+):
     note = db.query(StudyNote).filter(StudyNote.id == note_id).first()
     if not note:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Study note not found")

@@ -20,32 +20,14 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
     If the email is not registered yet (prototype mode), it seamlessly creates
     the account using the provided details and logs them in immediately.
     """
-    user = db.query(User).filter(User.email == payload.email.lower()).first()
+    user = db.query(User).filter(User.email == payload.email.strip().lower()).first()
 
-    if not user:
-        # Auto-create for seamless prototype experience if name/role provided
-        user_name = payload.name if payload.name else payload.email.split("@")[0].title()
-        user_role = payload.role if payload.role else UserRole.STUDENT
-        user_std = payload.standard if payload.standard else 8
-        
-        user = User(
-            name=user_name,
-            email=payload.email.lower(),
-            hashed_password=get_password_hash(payload.password),
-            role=user_role,
-            standard=user_std if user_role == UserRole.STUDENT else None
+    if not user or not verify_password(payload.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    else:
-        # Validate password if user exists
-        if not verify_password(payload.password, user.hashed_password):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
 
     token = create_access_token(data={"sub": str(user.id), "role": user.role.value})
     return TokenResponse(

@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -7,7 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
-void main() => runApp(const EduReachApp());
+void main() {
+  ApiService.wakeUp();
+  runApp(const EduReachApp());
+}
 
 enum UserRole { student, teacher }
 
@@ -180,7 +182,7 @@ static const String baseUrl =
         'name': name.trim(),
         'standard': standard,
       }),
-    );
+    ).timeout(const Duration(seconds: 90));
     if (response.statusCode != 200) {
       String detail = 'Login failed (${response.statusCode})';
       try { detail = '${(jsonDecode(response.body) as Map<String, dynamic>)['detail'] ?? detail}'; } catch (_) {}
@@ -189,6 +191,43 @@ static const String baseUrl =
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     token = '${data['access_token']}';
     return AuthUser.fromJson(data['user'] as Map<String, dynamic>);
+  }
+
+  static Future<AuthUser> register({
+    required String email,
+    required String password,
+    required UserRole role,
+    required String name,
+    required int standard,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/register'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'email': email.trim(),
+        'password': password,
+        'role': role == UserRole.teacher ? 'teacher' : 'student',
+        'name': name.trim(),
+        'standard': standard,
+      }),
+    ).timeout(const Duration(seconds: 90));
+    if (response.statusCode != 201) {
+      String detail = 'Registration failed (${response.statusCode})';
+      try { detail = '${(jsonDecode(response.body) as Map<String, dynamic>)['detail'] ?? detail}'; } catch (_) {}
+      throw Exception(detail);
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    token = '${data['access_token']}';
+    return AuthUser.fromJson(data['user'] as Map<String, dynamic>);
+  }
+
+  // Render free tier sleeps when idle; ping /health on app start so it wakes up early.
+  static Future<void> wakeUp() async {
+    try {
+      await http
+          .get(Uri.parse('${baseUrl.replaceFirst('/api/v1', '')}/health'))
+          .timeout(const Duration(seconds: 90));
+    } catch (_) {}
   }
 
   static void logout() => token = null;
@@ -338,14 +377,14 @@ class _LoginPageState extends State<LoginPage> {
 
   bool loggingIn = false;
 
-  Future<void> login() async {
+  Future<void> login({bool register = false}) async {
     if (name.text.trim().isEmpty || email.text.trim().isEmpty || password.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill in all fields.')));
       return;
     }
     setState(() => loggingIn = true);
     try {
-      final user = await ApiService.login(
+      final user = await (register ? ApiService.register : ApiService.login)(
         email: email.text.trim(),
         password: password.text,
         role: role,
@@ -475,11 +514,18 @@ class _LoginPageState extends State<LoginPage> {
                           onPressed: loggingIn ? null : login,
                           icon: loggingIn ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.login),
                           label: Text(
-                            role == UserRole.student
-                                ? 'Login as Student'
-                                : 'Login as Teacher',
+                            loggingIn
+                                ? 'Please wait, server may take up to a minute...'
+                                : (role == UserRole.student
+                                    ? 'Login as Student'
+                                    : 'Login as Teacher'),
                           ),
                         ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: loggingIn ? null : () => login(register: true),
+                        child: const Text('New here? Create account'),
                       ),
                       const SizedBox(height: 12),
                       const Center(
