@@ -1142,6 +1142,7 @@ class _LearnPageState extends State<LearnPage> {
         builder: (_) => SubjectPage(
           standard: standard,
           subject: subject,
+          notes: widget.notes,
         ),
       ),
     );
@@ -1244,15 +1245,26 @@ class _LearnPageState extends State<LearnPage> {
 class SubjectPage extends StatelessWidget {
   final int standard;
   final String subject;
+  final List<StudyNote> notes;
 
   const SubjectPage({
     super.key,
     required this.standard,
     required this.subject,
+    required this.notes,
   });
+
+  bool _sameSubject(String a, String b) {
+    final x = a.trim().toLowerCase();
+    final y = b.trim().toLowerCase();
+    return x == y || x.startsWith(y) || y.startsWith(x);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final subjectNotes = notes
+        .where((n) => n.standard == standard && _sameSubject(n.subject, subject))
+        .toList();
     return Scaffold(
       appBar: AppBar(
         title: Text(subject),
@@ -1266,9 +1278,14 @@ class SubjectPage extends StatelessWidget {
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 18),
-          const _Chapter(title: 'Chapter 1', subtitle: 'Introduction and basics'),
-          const _Chapter(title: 'Chapter 2', subtitle: 'Important concepts'),
-          const _Chapter(title: 'Chapter 3', subtitle: 'Examples and practice'),
+          if (subjectNotes.isEmpty)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Text('No notes uploaded for this subject yet.'),
+              ),
+            ),
+          ...subjectNotes.map((n) => _NoteCard(note: n)),
         ],
       ),
     );
@@ -1764,24 +1781,6 @@ class _ToolCard extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      );
-}
-
-class _Chapter extends StatelessWidget {
-  final String title, subtitle;
-  const _Chapter({required this.title, required this.subtitle});
-
-  @override
-  Widget build(BuildContext context) => Card(
-        child: ListTile(
-          leading: CircleAvatar(
-            backgroundColor: lavender.withOpacity(.55),
-            child: const Icon(Icons.play_arrow, color: navy),
-          ),
-          title: Text(title),
-          subtitle: Text(subtitle),
-          trailing: const Icon(Icons.chevron_right),
         ),
       );
 }
